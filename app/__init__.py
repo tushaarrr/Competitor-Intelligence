@@ -1,0 +1,2 @@
+"""Competitor Intelligence System."""
+

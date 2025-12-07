@@ -1,0 +1,131 @@
+[
+    {
+        "name": "Speedy Auto Service",
+        "url": "https://www.speedy.com/en-ca/shop/edmonton-south-central/",
+        "domain": "speedy.com",
+        "address": "4521 Gateway Blvd NW, Edmonton, AB T6H 5C3, Canada",
+        "google_maps": "https://www.google.com/maps/search/?api=1&query=Speedy+Auto+Service+4521+Gateway+Blvd+NW+Edmonton",
+        "facebook": "https://www.facebook.com/SpeedyAutoServiceCanada/",
+        "instagram": "https://www.instagram.com/speedyautoservice/",
+        "linkedin": "https://www.linkedin.com/company/speedy-auto-service-canada/",
+        "promo_links": ["https://www.speedy.com/en-ca/promotions/"]
+    },
+    {
+        "name": "Midas",
+        "url": "https://www.midas.com",
+        "domain": "midas.com",
+        "address": "3408 99 St NW, Edmonton, AB T6E 5X5, Canada",
+        "google_maps": "https://www.google.com/maps/search/?api=1&query=Midas+3408+99+St+NW+Edmonton",
+        "facebook": "https://www.facebook.com/Midas/",
+        "instagram": "https://www.instagram.com/midas/",
+        "linkedin": "https://www.linkedin.com/company/midas-international",
+        "promo_links": [
+            "https://www.midas.com/rebates",
+            "https://www.midascanada.com/archive",
+            "https://www.midas.com/about-midas/midas-credit-card-service-financing?country=ca"
+        ]
+    },
+    {
+        "name": "Mr. Lube",
+        "url": "https://www.mrlube.com/en",
+        "domain": "mrlube.com",
+        "address": "10315 34 Ave NW, Edmonton, AB T6J 6V1, Canada",
+        "google_maps": "https://www.google.com/maps/search/?api=1&query=Mr+Lube+10315+34+Ave+NW+Edmonton",
+        "facebook": "https://www.facebook.com/MrLubeCanada/",
+        "instagram": "https://www.instagram.com/mrlubecanada/",
+        "linkedin": "https://www.linkedin.com/company/mr-lube-canada"
+    },
+    {
+        "name": "Integra Tire Auto Centre",
+        "url": "https://integratire.com/centre/edmonton-99st/",
+        "domain": "integratire.com",
+        "address": "5035 99 St NW, Edmonton, AB T6E 4Y1, Canada",
+        "google_maps": "https://www.google.com/maps/search/?api=1&query=Integra+Tire+Auto+Centre+5035+99+St+NW+Edmonton",
+        "facebook": "https://www.facebook.com/IntegraTire/",
+        "instagram": "https://www.instagram.com/integratire/",
+        "linkedin": "https://www.linkedin.com/company/integra-tire-auto-centres",
+        "promo_links": ["https://integratire.com/promotions/"]
+    },
+    {
+        "name": "Trail Tire Auto Centres",
+        "url": "https://trailtire.com/alberta-south/",
+        "domain": "trailtire.com",
+        "address": "4717 99 St NW, Edmonton, AB T6E 4Y1, Canada",
+        "google_maps": "https://www.google.com/maps/search/?api=1&query=Trail+Tire+4717+99+St+NW+Edmonton",
+        "facebook": "https://www.facebook.com/trailtire/",
+        "instagram": "https://www.instagram.com/trailtire/",
+        "linkedin": "https://www.linkedin.com/company/trail-tire",
+        "promo_links": ["https://trailtire.com/promotions/"]
+    },
+    {
+        "name": "Valvoline Express Care",
+        "url": "http://valvolineedmonton.ca/",
+        "domain": "valvolineedmonton.ca",
+        "address": "9516 51 Ave NW, Edmonton, AB T6E 5A6, Canada",
+        "google_maps": "https://www.google.com/maps/search/?api=1&query=Valvoline+Express+Care+9516+51+Ave+NW+Edmonton",
+        "facebook": "https://www.facebook.com/valvoline/",
+        "instagram": "https://www.instagram.com/valvoline/",
+        "linkedin": "https://www.linkedin.com/company/valvoline-inc-",
+        "promo_links": ["http://valvolineedmonton.ca/"]
+    },
+    {
+        "name": "Kal Tire",
+        "url": "https://www.kaltire.com/",
+        "domain": "kaltire.com",
+        "address": "2030 101 St NW, Edmonton, AB T6N 1J2, Canada",
+        "google_maps": "https://www.google.com/maps/search/?api=1&query=Kal+Tire+2030+101+St+NW+Edmonton",
+        "facebook": "https://www.facebook.com/KalTire/",
+        "instagram": "https://www.instagram.com/kaltire/",
+        "linkedin": "https://www.linkedin.com/company/kal-tire",
+        "promo_links": ["https://www.kaltire.com/en/promotions/"]
+    },
+    {
+        "name": "Jiffy Lube",
+        "url": "https://www.jiffylubeservice.ca/oil-change-locations/edmonton-south-common",
+        "domain": "jiffylubeservice.ca",
+        "address": "2121 101 St NW, Edmonton, AB T6N 0A2, Canada",
+        "google_maps": "https://share.google/t3PMalzlPtfaoUQqe",
+        "facebook": "https://www.facebook.com/jiffylubeontario/",
+        "instagram": "https://www.instagram.com/jiffylubeontario/",
+        "linkedin": "https://www.linkedin.com/company/jiffy-lube-international",
+        "promo_links": ["https://www.jiffylubeservice.ca/coupons"]
+    },
+    {
+        "name": "Canadian Tire Auto Service",
+        "url": "https://www.canadiantire.ca/en/automotive-services.html",
+        "domain": "canadiantire.ca",
+        "address": "2110 101 St NW, Edmonton, AB T6N 0A2, Canada",
+        "google_maps": "https://www.google.com/maps/search/?api=1&query=Canadian+Tire+Auto+Service+2110+101+St+NW+Edmonton",
+        "facebook": "https://www.facebook.com/Canadiantire/",
+        "instagram": "https://www.instagram.com/canadiantire/",
+        "linkedin": "https://www.linkedin.com/company/canadian-tire"
+    },
+    {
+        "name": "Fountain Tire",
+        "url": "https://www.fountaintire.com/",
+        "domain": "fountaintire.com",
+        "address": "3303 97 St NW, Edmonton, AB T6N 1B7, Canada",
+        "google_maps": "https://www.google.com/maps/search/?api=1&query=Fountain+Tire+3303+97+St+NW+Edmonton",
+        "facebook": "https://www.facebook.com/FountainTire/",
+        "instagram": "https://www.instagram.com/fountaintire/",
+        "linkedin": "https://www.linkedin.com/company/fountain-tire-ltd-",
+        "promo_links": [
+            "https://www.fountaintire.com/promotions/",
+            "https://www.fountaintire.com/promotions/tire-rebates/",
+            "https://www.fountaintire.com/promotions/financing/"
+        ]
+    },
+    {
+        "name": "Good News Auto",
+        "url": "https://goodnewsauto.ca/",
+        "domain": "goodnewsauto.ca",
+        "address": "6932 76 Ave NW, Edmonton, AB T6B 2R2, Canada",
+        "google_maps": "https://www.google.com/maps/search/?api=1&query=Good+News+Auto+6932+76+Ave+NW+Edmonton",
+        "facebook": "https://www.facebook.com/GoodNewsAuto/",
+        "instagram": "https://www.instagram.com/goodnewsauto/",
+        "linkedin": null,
+        "promo_links": ["https://www.goodnewsauto.ca/our-services"]
+    }
+]
+
+
