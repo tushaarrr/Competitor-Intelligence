@@ -14,5 +14,15 @@
             {"url": "https://www.gcoc.ca/services/transmission-fluid-service/", "service_hint": "Transmission Fluid"},
             {"url": "https://www.gcoc.ca/services/radiator-fluid-service/",   "service_hint": "Radiator Flush"}
         ]
+    },
+    {
+        "competitor": "Mr. Lube + Tires",
+        "website": "mrlube.com",
+        "cities": ["Calgary", "Edmonton"],
+        "source_scope": "national_shared",
+        "extraction_methods": ["image_ocr", "text"],
+        "promo_links": [
+            {"url": "https://www.mrlube.com/en/Services/tire-rebates-and-financing", "service_hint": "Tire Sales"}
+        ]
     }
 ]
