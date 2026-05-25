@@ -37,15 +37,15 @@ _FIRECRAWL_V1 = "https://api.firecrawl.dev/v1/scrape"
 # ---------------------------------------------------------------------------
 
 COMPETITORS: List[Dict] = [
-    {"name": "Midas",                     "domain": "midas.com"},
-    {"name": "Lube Town",                 "domain": "lubetown.com"},
-    {"name": "Jiffy Lube",                "domain": "jiffylubeservice.ca"},
-    {"name": "Great Canadian Oil Change", "domain": "gcoc.ca"},
-    {"name": "Quick Lane",                "domain": "quicklane.com"},
+    {"name": "Midas",                     "advertiser_id": "AR11515155316006191105"},
+    {"name": "Lube Town",                 "advertiser_id": "AR07923297702782173185"},
+    {"name": "Jiffy Lube",                "advertiser_id": "AR10265048674404925441"},
+    {"name": "Great Canadian Oil Change", "advertiser_id": "AR06652422686691557377"},  # Valvoline franchise
+    {"name": "Quick Lane",                "advertiser_id": "AR01146826087020363777"},
     {"name": "Valvoline",                 "advertiser_id": "AR06652422686691557377"},
-    {"name": "Econo Lube",               "domain": "econolube.ca"},
-    {"name": "Lube FX Plus",             "domain": "lubefx.com"},
-    {"name": "Mr. Lube + Tires",         "domain": "mrlube.com"},
+    {"name": "Econo Lube",               "advertiser_id": "AR03728714169130680321"},
+    {"name": "Lube FX Plus",             "advertiser_id": "AR07682908778362044417"},
+    {"name": "Mr. Lube + Tires",         "advertiser_id": "AR00685141515294474241"},
 ]
 
 
