@@ -251,36 +251,10 @@ def _parse_creative_page(html: str) -> Optional[Dict]:
 # Field extractors
 # ---------------------------------------------------------------------------
 
-_SERVICE_KEYWORDS: List[tuple] = [
-    ("Oil Change",         re.compile(r"oil.?change", re.I)),
-    ("Tire Sales",         re.compile(r"tire sale|new tire|set of tire|buy.*tire", re.I)),
-    ("Tire Rotation",      re.compile(r"tire rotation", re.I)),
-    ("Brake",              re.compile(r"brake", re.I)),
-    ("Battery",            re.compile(r"battery", re.I)),
-    ("Transmission Fluid", re.compile(r"transmission fluid|trans fluid", re.I)),
-    ("Radiator Flush",     re.compile(r"radiator flush|coolant flush", re.I)),
-    ("Fuel System Flush",  re.compile(r"fuel system", re.I)),
-]
-
 _DISCOUNT_RE = re.compile(
     r"(\$\s*\d+(?:\.\d+)?(?:\s*off)?|\d+\s*%\s*off|free\s+\w+|buy\s+\d+\s+get\s+\d+)",
     re.IGNORECASE,
 )
-_COUPON_RE = re.compile(r"\b([A-Z0-9]{4,15})\b")
-_COUPON_NOISE_RE = re.compile(
-    r"^(GET|OFF|FREE|SAVE|DEAL|CODE|SALE|WITH|FROM|YOUR|COUPON|OFFER|TIRE|"
-    r"LUBE|MIDAS|JIFFY|QUICK|FORD|LANE|PLUS|FULL|HALF|EACH|ONLY|MOST|BEST|"
-    r"THIS|THAT|WHEN|THEN|HAVE|BEEN|WILL|COME|CALL|BOOK|SHOP|FIND|NEED|"
-    r"KNOW|TAKE|MAKE|KEEP|USED|PAID|OPEN|DAYS|AWAY|VISIT|SITE|AUTO|CARE)$"
-)
-
-
-def _classify(title: str, desc: str) -> str:
-    combined = f"{title} {desc}"
-    for label, pattern in _SERVICE_KEYWORDS:
-        if pattern.search(combined):
-            return label
-    return ""
 
 
 def _discount(title: str, desc: str) -> str:
@@ -288,15 +262,6 @@ def _discount(title: str, desc: str) -> str:
         m = _DISCOUNT_RE.search(text)
         if m:
             return m.group(0).strip()
-    return ""
-
-
-def _coupon(title: str, desc: str) -> str:
-    for text in (title, desc):
-        for m in _COUPON_RE.finditer(text):
-            token = m.group(1)
-            if not _COUPON_NOISE_RE.match(token):
-                return token
     return ""
 
 
@@ -316,6 +281,11 @@ def _scrape_one_competitor(competitor: Dict) -> Dict:
     if not creative_urls:
         logger.warning(f"[ads] {name}: no creative URLs found")
         return {"competitor": name, "url": atc_url, "status": "no_creatives", "ads": []}
+
+    MAX_CREATIVES = 15
+    if len(creative_urls) > MAX_CREATIVES:
+        logger.info(f"[ads] {name}: capping at {MAX_CREATIVES} of {len(creative_urls)} creatives")
+        creative_urls = creative_urls[:MAX_CREATIVES]
 
     logger.info(f"[ads] {name}: Step 2 — fetching {len(creative_urls)} creative pages")
     enriched: List[Dict] = []
@@ -340,15 +310,13 @@ def _scrape_one_competitor(competitor: Dict) -> Dict:
         seen_titles.add(key)
 
         enriched.append({
-            "business_name":    name,
-            "ad_title":         title,
-            "ad_description":   desc,
-            "service_category": _classify(title, desc),
-            "discount_value":   _discount(title, desc),
-            "coupon_code":      _coupon(title, desc),
-            "ad_link":          creative_url,
-            "displayed_link":   ad["displayed_link"] or domain,
-            "date_scraped":     today,
+            "business_name":  name,
+            "ad_title":       title,
+            "ad_description": desc,
+            "discount_value": _discount(title, desc),
+            "ad_link":        creative_url,
+            "displayed_link": ad["displayed_link"] or domain,
+            "date_scraped":   today,
         })
         time.sleep(1)  # polite pause between creative page fetches
 
