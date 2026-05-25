@@ -152,6 +152,8 @@ _NOISE_PREFIX_RE = re.compile(
 )
 _TEMPLATE_RE = re.compile(r"<[A-Z]")
 _ICON_RE = re.compile(r"^[a-z_]+$")
+# Matches store-hours strings like "8 AM–6 PM" or "Open 24 hours"
+_HOURS_RE = re.compile(r"\d+\s*(AM|PM|am|pm)|open\s+\d+|closes?\s+at", re.I)
 
 
 def _is_noise(text: str) -> bool:
@@ -165,6 +167,8 @@ def _is_noise(text: str) -> bool:
     if _ICON_RE.match(t):
         return True
     if _NOISE_PREFIX_RE.match(t):
+        return True
+    if _HOURS_RE.search(t):
         return True
     return False
 

@@ -52,13 +52,23 @@ def export_ads_csv(ads: list, dest: Path) -> Path:
 
 
 def push_ads_to_sheets(ads: list) -> bool:
-    try:
-        from app.config.constants import ROOT as PROJ_ROOT
-        from google.oauth2 import service_account
-        from googleapiclient.discovery import build
-    except ImportError:
+    import sys as _sys
+    for _p in [None, "/tmp/gapi"]:
+        if _p:
+            _sys.path.insert(0, _p)
+        try:
+            from google.oauth2 import service_account
+            from googleapiclient.discovery import build
+            break
+        except ImportError:
+            if _p:
+                _sys.path.pop(0)
+            continue
+    else:
         print("ERROR: google-api-python-client not installed.")
         return False
+
+    from app.config.constants import ROOT as PROJ_ROOT
 
     creds_path = PROJ_ROOT / "service_account.json"
     if not creds_path.exists():
