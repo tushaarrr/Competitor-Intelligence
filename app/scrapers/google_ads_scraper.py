@@ -52,8 +52,8 @@ COMPETITORS: List[Dict] = [
 def _build_url(competitor: Dict) -> str:
     aid = competitor.get("advertiser_id")
     if aid:
-        return f"{_BASE_ATC}/advertiser/{aid}?region=CA"
-    return f"{_BASE_ATC}/?region=CA&domain={competitor['domain']}"
+        return f"{_BASE_ATC}/advertiser/{aid}?region=CA&format=TEXT"
+    return f"{_BASE_ATC}/?region=CA&domain={competitor['domain']}&format=TEXT"
 
 
 # ---------------------------------------------------------------------------
@@ -321,7 +321,7 @@ def _scrape_one_competitor(competitor: Dict) -> Dict:
         logger.warning(f"[ads] {name}: no creative URLs found")
         return {"competitor": name, "url": atc_url, "status": "no_creatives", "ads": []}
 
-    MAX_CREATIVES = 15
+    MAX_CREATIVES = 40
     if len(creative_urls) > MAX_CREATIVES:
         logger.info(f"[ads] {name}: capping at {MAX_CREATIVES} of {len(creative_urls)} creatives")
         creative_urls = creative_urls[:MAX_CREATIVES]
