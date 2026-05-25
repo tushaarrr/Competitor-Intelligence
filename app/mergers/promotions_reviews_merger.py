@@ -1,5 +1,14 @@
-"""Merger for combining promotions, reviews, and AI Overview data for Google Sheets."""
+"""Merger for combining promotions, reviews, and AI Overview data for Google Sheets.
+
+v2 path (default): scans PROMOTIONS_DIR for *_v2.json files produced by Phase 5
+scrapers.  Each v2 row already has all 14 sheet columns populated; the merger
+only fills the null `google_reviews` field from reviews data.
+
+Legacy path: loads old-format JSON files via competitor_list.json for any
+competitor not yet covered by a v2 scraper.
+"""
 import json
+import re
 from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime
@@ -13,6 +22,157 @@ PROMOTIONS_DIR = DATA_DIR / "promotions"
 REVIEWS_DIR = DATA_DIR / "reviews"
 OUTPUT_DIR = DATA_DIR / "sheets_ready"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# 15 standard sheet columns (in order).  v2 rows carry all of these already.
+SHEET_COLUMNS = [
+    "website", "page_url", "business_name", "google_reviews",
+    "service_name", "promo_description", "category", "contact",
+    "offer_details", "ad_title", "ad_text",
+    "new_or_updated", "date_scraped",
+    "city", "extraction_method",
+]
+
+# Extra v2 QA columns appended after the 14 standard ones.
+V2_EXTRA_COLUMNS = [
+    "city", "store_name", "source_scope", "extraction_method",
+    "confidence", "needs_review", "needs_review_reason",
+    "discount_value", "coupon_code", "expiry_date",
+    "promotion_title", "normalized_title", "applicable_cities",
+    "duplicate_group_id", "duplicate_group_total",
+]
+
+
+# ---------------------------------------------------------------------------
+# Review-lookup helpers
+# ---------------------------------------------------------------------------
+
+def _norm(name: str) -> str:
+    """Lower-case, keep only alphanumeric chars for fuzzy matching."""
+    return re.sub(r"[^a-z0-9]", "", (name or "").lower())
+
+
+def _find_review(business_name: str, reviews_data: List[Dict]) -> Dict:
+    """Return the review dict whose business_name best matches *business_name*.
+
+    Tries exact normalised match first, then substring containment in either
+    direction.  Returns {} if nothing matches.
+    """
+    target = _norm(business_name)
+    if not target:
+        return {}
+    for r in reviews_data:
+        if _norm(r.get("business_name", "")) == target:
+            return r
+    for r in reviews_data:
+        rn = _norm(r.get("business_name", ""))
+        if rn and (rn in target or target in rn):
+            return r
+    return {}
+
+
+_GENERIC_TITLES: set = {"check", "promotion", "offer", "deal", "na", "n/a", "none", ""}
+
+
+def _make_offer_summary(row: Dict) -> str:
+    """Return a short 1-2 sentence offer_details summary for a v2 row.
+
+    Priority:
+    1. ad_title when >= 15 chars and not generic (it's the scraper's headline)
+    2. promo_description when <= 200 chars (already LLM-cleaned by the scraper)
+    3. Existing offer_details when already short (<= 120 chars) and distinct from ad_text
+    4. LLM call on ad_text as last resort
+    5. First sentence fallback
+    """
+    ad_title = (row.get("ad_title") or "").strip()
+    offer_details = (row.get("offer_details") or "").strip()
+    ad_text = (row.get("ad_text") or "").strip()
+    promo_desc = (row.get("promo_description") or "").strip()
+
+    # 1. Use ad_title if it looks like a real headline (not just a service type label)
+    if ad_title and 15 <= len(ad_title) <= 120 and ad_title.lower() not in _GENERIC_TITLES:
+        return ad_title
+
+    # 2. promo_description is already LLM-cleaned by the scraper — prefer it over long offer_details
+    if promo_desc:
+        if len(promo_desc) <= 200:
+            return promo_desc
+        # Promo desc too long — extract just the first sentence
+        sentences = re.split(r'[.!?]+\s+', promo_desc.strip())
+        first = sentences[0].strip() if sentences else ""
+        if 15 <= len(first) <= 200:
+            return first + ("." if first[-1] not in ".!?" else "")
+
+    # 3. Keep existing offer_details if it's already a short, distinct snippet
+    if offer_details and len(offer_details) <= 120 and offer_details != ad_text[:len(offer_details)]:
+        return offer_details
+
+    # 4. LLM summarisation (only when we have substantial text to summarise)
+    text_to_summarise = ad_text or promo_desc or offer_details
+    if text_to_summarise and len(text_to_summarise) > 30:
+        try:
+            from app.extractors.ocr.llm_cleaner import clean_promo_text_with_llm
+            result = clean_promo_text_with_llm(
+                text_to_summarise,
+                context="Write a short 1-2 sentence customer-facing summary of this automotive promo offer.",
+            )
+            if result and isinstance(result, dict):
+                summary = (result.get("promo_description") or "").strip()
+                if len(summary) > 10:
+                    return summary[:200]
+        except Exception as exc:
+            logger.debug(f"LLM offer summary failed: {exc}")
+
+    # 5. First sentence of promo_desc / offer_details as last resort
+    source = promo_desc or offer_details or ad_text
+    if source:
+        sentences = re.split(r'[.!?]+\s+', source.strip())
+        first = sentences[0].strip() if sentences else ""
+        if 10 <= len(first) <= 200:
+            return first + ("." if first[-1] not in ".!?" else "")
+        return source[:150].strip()
+
+    return offer_details  # keep whatever was there
+
+
+def _enrich_v2_row(row: Dict, reviews_data: List[Dict]) -> Dict:
+    """Fill null google_reviews and clean offer_details for a v2 promo row."""
+    if not row.get("google_reviews"):
+        review = _find_review(row.get("business_name", ""), reviews_data)
+        row["google_reviews"] = format_google_reviews(
+            review.get("google_review_stars"),
+            review.get("google_review_count"),
+        )
+    row["offer_details"] = _make_offer_summary(row)
+    return row
+
+
+# ---------------------------------------------------------------------------
+# v2 loading
+# ---------------------------------------------------------------------------
+
+def load_v2_promotions(reviews_data: List[Dict]) -> List[Dict]:
+    """Scan PROMOTIONS_DIR for *_v2.json files and return enriched rows.
+
+    Each file must have the structure ``{"promotions": [...], ...}`` produced
+    by Phase 5 scrapers.  Rows are returned in file-name order.
+    """
+    all_rows: List[Dict] = []
+    v2_files = sorted(PROMOTIONS_DIR.glob("*_v2.json"))
+    if not v2_files:
+        logger.warning(f"No *_v2.json files found in {PROMOTIONS_DIR}")
+        return all_rows
+
+    for path in v2_files:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            promos = data.get("promotions", [])
+            enriched = [_enrich_v2_row(dict(r), reviews_data) for r in promos]
+            all_rows.extend(enriched)
+            logger.info(f"[v2] Loaded {len(enriched)} rows from {path.name}")
+        except Exception as exc:
+            logger.error(f"[v2] Failed to load {path.name}: {exc}", exc_info=True)
+
+    return all_rows
 
 
 def normalize_float(value: any) -> Optional[str]:
@@ -428,90 +588,283 @@ def merge_promotions_with_reviews_and_ai_overview(
     return merged_rows
 
 
-def merge_all_data() -> List[Dict]:
+# Competitors that have v2 scrapers.  The merger uses this to skip stale
+# legacy JSON files for competitors that now have proper v2 output.
+# Valvoline has no v2 scraper yet and is intentionally absent — it falls
+# back to the legacy path if its JSON file is present.
+_ACTIVE_COMPETITORS: set = {
+    "jiffy lube", "lube town", "midas", "quick lane",
+    "great canadian oil change", "econo lube", "mr. lube + tires",
+    "mr. lube", "lubefx plus", "lubefx", "mobil 1 lube express",
+}
+
+
+_CITY_KEYWORDS: List[str] = ["Calgary", "Edmonton", "Grande Prairie"]
+
+
+def _infer_city(competitor_config: Dict) -> Optional[str]:
+    """Attempt to extract a known city name from the competitor's address field."""
+    address = (competitor_config.get("address") or "").lower()
+    for city in _CITY_KEYWORDS:
+        if city.lower() in address:
+            return city
+    return None
+
+
+def _covered_by_v2(business_name: str, v2_names_norm: set) -> bool:
+    """Return True if *business_name* is already represented in v2 rows.
+
+    Uses both exact normalised match and bidirectional substring containment
+    so 'Mr. Lube' (legacy) is recognised as a duplicate of 'Mr. Lube + Tires' (v2).
     """
-    Load all promotions, reviews, and configs, then merge for Google Sheets.
-    
+    target = _norm(business_name)
+    if not target:
+        return False
+    if target in v2_names_norm:
+        return True
+    # Bidirectional substring: catches "mrlube" ⊂ "mrlubeandtires".
+    for v2n in v2_names_norm:
+        if (target in v2n) or (v2n in target):
+            return True
+    return False
+
+
+_OCR_JUNK = re.compile(
+    r'GET[\xa0\s]+COUPON|Fill in your information below[^.]*\.|'
+    r'^\s*Coupon\s+|^\s*Offer\s*\n',
+    re.IGNORECASE | re.MULTILINE,
+)
+
+# Single-word OCR label lines to strip when they appear alone on a line
+_OCR_LABEL_LINE = re.compile(
+    r'^(Shop|Online|Choose|Offer|Coupon|Print)\s*$',
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _clean_ad_text(text: str) -> str:
+    """Remove OCR artifacts, non-breaking spaces, and repeated UI junk from ad_text."""
+    if not text:
+        return text
+    text = text.replace("\xa0", " ")
+    text = _OCR_JUNK.sub("", text)
+    text = _OCR_LABEL_LINE.sub("", text)
+    # Collapse runs of 3+ newlines to double newline
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    # Collapse runs of spaces
+    text = re.sub(r'[ \t]{2,}', ' ', text)
+    return text.strip()
+
+
+def _clean_date(value: Optional[str]) -> str:
+    """Trim ISO timestamps to YYYY-MM-DD; return today's date on failure."""
+    if not value:
+        return datetime.now().strftime("%Y-%m-%d")
+    # ISO timestamp: take the date part before 'T'
+    if "T" in value:
+        return value.split("T")[0]
+    # Already looks like YYYY-MM-DD or close enough
+    return value[:10] if len(value) >= 10 else datetime.now().strftime("%Y-%m-%d")
+
+
+def merge_all_data(*, include_legacy: bool = True) -> List[Dict]:
+    """Load all promotions and reviews, merge for Google Sheets.
+
+    v2 scrapers are loaded first (all *_v2.json files).  If *include_legacy*
+    is True, the legacy competitor_list.json path is also checked — but only
+    for competitors whose scrapers have NOT yet been upgraded to v2 (currently
+    only Valvoline).  Stale legacy files for deleted/replaced competitors are
+    silently skipped.
+
     Returns:
-        List of all merged rows for all competitors
+        List of all merged rows for all competitors.
     """
-    # Load competitor config
-    config_file = Path(__file__).parent.parent / "config" / "competitor_list.json"
-    competitors = json.loads(config_file.read_text())
-    
-    # Load all reviews
+    # Load all reviews once.
     reviews_file = REVIEWS_DIR / "all_reviews.json"
     if reviews_file.exists():
-        reviews_data = json.loads(reviews_file.read_text()).get("reviews", [])
+        reviews_data = json.loads(reviews_file.read_text(encoding="utf-8")).get("reviews", [])
     else:
         logger.warning(f"Reviews file not found: {reviews_file}")
         reviews_data = []
-    
-    # Load all promotions
-    all_merged_rows = []
-    
+
+    all_merged_rows: List[Dict] = []
+
+    # --- v2 path -----------------------------------------------------------
+    v2_rows = load_v2_promotions(reviews_data)
+    all_merged_rows.extend(v2_rows)
+    logger.info(f"[v2] Total rows from v2 files: {len(v2_rows)}")
+
+    v2_names_norm = {_norm(r.get("business_name", "")) for r in v2_rows}
+
+    # --- legacy path -------------------------------------------------------
+    if not include_legacy:
+        return all_merged_rows
+
+    config_file = Path(__file__).parent.parent / "config" / "competitor_list.json"
+    if not config_file.exists():
+        logger.warning(f"Legacy config not found: {config_file}")
+        return all_merged_rows
+
+    competitors = json.loads(config_file.read_text(encoding="utf-8"))
+
     for competitor in competitors:
         business_name = competitor.get("name", "")
+        name_lower = (business_name or "").lower().strip()
+
+        # Skip competitors now covered by v2 scrapers.
+        if _covered_by_v2(business_name, v2_names_norm):
+            logger.info(f"[legacy] Skipping {business_name!r} — covered by v2")
+            continue
+
+        # Skip stale legacy files for competitors no longer in scope.
+        if name_lower not in _ACTIVE_COMPETITORS and name_lower != "valvoline express care":
+            logger.info(f"[legacy] Skipping {business_name!r} — not in active competitor set")
+            continue
+
         name_slug = business_name.lower().replace(" ", "_")
         promo_file = PROMOTIONS_DIR / f"{name_slug}.json"
-        
         if not promo_file.exists():
-            logger.warning(f"Promotions file not found: {promo_file}")
+            logger.warning(f"[legacy] Promotions file not found: {promo_file}")
             continue
-        
+
         try:
-            promo_data = json.loads(promo_file.read_text())
-            
-            # Handle both single dict and list format
-            if isinstance(promo_data, list):
-                promo_results = promo_data
-            else:
-                promo_results = [promo_data]
-            
+            promo_data = json.loads(promo_file.read_text(encoding="utf-8"))
+            promo_results = promo_data if isinstance(promo_data, list) else [promo_data]
             merged_rows = merge_promotions_with_reviews_and_ai_overview(
-                promo_results,
-                reviews_data,
-                competitor
+                promo_results, reviews_data, competitor
             )
-            
+            # Patch city from address if the scraper didn't set one.
+            inferred_city = _infer_city(competitor)
+            if inferred_city:
+                for r in merged_rows:
+                    if not r.get("city"):
+                        r["city"] = inferred_city
+                        r.setdefault("applicable_cities", [inferred_city])
             all_merged_rows.extend(merged_rows)
-            logger.info(f"Merged {len(merged_rows)} rows for {business_name}")
-            
-        except Exception as e:
-            logger.error(f"Error merging data for {business_name}: {e}", exc_info=True)
-    
+            logger.info(f"[legacy] Merged {len(merged_rows)} rows for {business_name}")
+        except Exception as exc:
+            logger.error(f"[legacy] Error merging {business_name}: {exc}", exc_info=True)
+
+    # Final pass: clean up all rows before they go to the sheet
+    for row in all_merged_rows:
+        row["offer_details"] = _make_offer_summary(row)
+        row["date_scraped"] = _clean_date(row.get("date_scraped"))
+        row["ad_text"] = _clean_ad_text(row.get("ad_text") or "")
+
     return all_merged_rows
 
 
+def _write_csv(rows: List[Dict], path: Path, fieldnames: List[str]) -> None:
+    """Write *rows* to *path* as a CSV with *fieldnames* ordered first."""
+    import csv
+    all_keys = list(dict.fromkeys(
+        fieldnames
+        + [k for r in rows for k in r if k not in fieldnames]
+    ))
+    with path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=all_keys, extrasaction="ignore")
+        w.writeheader()
+        for r in rows:
+            flat = {}
+            for k in all_keys:
+                v = r.get(k)
+                if v is None:
+                    flat[k] = ""
+                elif isinstance(v, (list, dict)):
+                    flat[k] = json.dumps(v, ensure_ascii=False)
+                else:
+                    flat[k] = str(v)
+            w.writerow(flat)
+
+
+def split_by_city(rows: List[Dict]) -> Dict[str, List[Dict]]:
+    """Group rows by their exact city field value.
+
+    Rows without a city field land in "Unknown".
+    """
+    groups: Dict[str, List[Dict]] = {}
+    for row in rows:
+        city = (row.get("city") or "Unknown").strip()
+        groups.setdefault(city, []).append(row)
+    return groups
+
+
+def save_city_sheets(rows: List[Dict], output_dir: Optional[Path] = None) -> Dict[str, Path]:
+    """Save one CSV per city to *output_dir* (default: data/sheets_ready/).
+
+    File names follow the pattern ``{city_slug}_promos.csv``.
+    Returns a dict mapping city name → Path.
+    """
+    if output_dir is None:
+        output_dir = OUTPUT_DIR
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    col_order = SHEET_COLUMNS + V2_EXTRA_COLUMNS
+    city_files: Dict[str, Path] = {}
+    by_city = split_by_city(rows)
+
+    for city, city_rows in sorted(by_city.items()):
+        slug = re.sub(r"[^a-z0-9]+", "_", city.lower()).strip("_")
+        path = output_dir / f"{slug}_promos.csv"
+        _write_csv(city_rows, path, col_order)
+        city_files[city] = path
+        logger.info(f"[city-split] {city}: {len(city_rows)} rows → {path.name}")
+
+    return city_files
+
+
 def save_merged_data(rows: List[Dict], output_file: Optional[Path] = None) -> Path:
-    """Save merged data to JSON file."""
+    """Save merged data to JSON + main CSV + per-city CSVs."""
     if output_file is None:
         output_file = OUTPUT_DIR / "promotions_merged_for_sheets.json"
-    
+
     output_data = {
         "merged_at": datetime.now().isoformat(),
         "total_rows": len(rows),
-        "rows": rows
+        "rows": rows,
     }
-    
-    output_file.write_text(json.dumps(output_data, indent=2, default=str))
+    output_file.write_text(json.dumps(output_data, indent=2, default=str), encoding="utf-8")
     logger.info(f"Saved {len(rows)} merged rows to {output_file}")
-    
+
+    # Main CSV (all cities combined).
+    if rows:
+        col_order = SHEET_COLUMNS + V2_EXTRA_COLUMNS
+        csv_path = output_file.with_suffix(".csv")
+        _write_csv(rows, csv_path, col_order)
+        logger.info(f"Saved main CSV to {csv_path}")
+
+        # Per-city CSVs.
+        save_city_sheets(rows, output_dir=output_file.parent)
+
     return output_file
 
 
 if __name__ == "__main__":
-    print("🔄 Merging promotions, reviews, and AI Overview data...")
+    import sys
+    print("=" * 70)
+    print("Promotions merger — v2 + legacy")
+    print("=" * 70)
     rows = merge_all_data()
+
+    # Summary by competitor
+    from collections import Counter
+    by_biz: Counter = Counter(r.get("business_name", "?") for r in rows)
+    print(f"\nTotal rows: {len(rows)}")
+    for name, n in sorted(by_biz.items()):
+        print(f"  {name:<40}: {n}")
+
     output_file = save_merged_data(rows)
-    print(f"✅ Merged {len(rows)} rows saved to: {output_file}")
-    
-    # Show sample
+    csv_path = output_file.with_suffix(".csv")
+    print(f"\nJSON: {output_file}")
+    print(f"CSV : {csv_path}")
+
     if rows:
-        print("\n📊 Sample merged row:")
         sample = rows[0]
-        print(f"   Business: {sample.get('business_name')}")
-        print(f"   Promo Description: {sample.get('promo_description')[:80]}...")
-        print(f"   Ad Text: {sample.get('ad_text')[:80] if sample.get('ad_text') else 'N/A'}...")
-        print(f"   Google Reviews: {sample.get('google_reviews')}")
+        print(f"\nSample ({sample.get('business_name')}):")
+        print(f"  promo_description : {(sample.get('promo_description') or '')[:90]!r}")
+        print(f"  google_reviews    : {sample.get('google_reviews')}")
+        print(f"  city              : {sample.get('city')}")
+        print(f"  discount_value    : {sample.get('discount_value')}")
+        print(f"  coupon_code       : {sample.get('coupon_code')}")
+        print(f"  expiry_date       : {sample.get('expiry_date')}")
 
