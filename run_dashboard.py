@@ -21,6 +21,7 @@ ROOT        = Path(__file__).resolve().parent
 ADS_FILE    = ROOT / "data" / "ads" / "google_ads.json"
 PROMOS_FILE = ROOT / "data" / "sheets_ready" / "promotions_merged_for_sheets.json"
 OUT_FILE    = ROOT / "dashboard.html"
+PUBLIC_FILE = ROOT / "public" / "index.html"
 
 PALETTE = [
     "#6366f1","#d97706","#059669","#dc2626",
@@ -914,6 +915,9 @@ def main():
     html = build_html(ads, promos)
     OUT_FILE.write_text(html, encoding="utf-8")
     print(f"Dashboard → {OUT_FILE}")
+    PUBLIC_FILE.parent.mkdir(parents=True, exist_ok=True)
+    PUBLIC_FILE.write_text(html, encoding="utf-8")
+    print(f"Pages     → {PUBLIC_FILE}")
     if args.open:
         webbrowser.open(OUT_FILE.as_uri())
 

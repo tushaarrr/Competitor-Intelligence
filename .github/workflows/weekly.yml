@@ -1,0 +1,124 @@
+name: Weekly Competitor Intelligence
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'   # Every Monday 2 AM UTC
+  workflow_dispatch:        # Manual trigger from GitHub UI
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  # ── Job 1: Scrape → Merge → Sheets → Dashboard ─────────────────────────────
+  scrape-and-build:
+    runs-on: ubuntu-latest
+    outputs:
+      scrape_date: ${{ steps.meta.outputs.date }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write .env
+        env:
+          FIRECRAWL_API_KEY:            ${{ secrets.FIRECRAWL_API_KEY }}
+          ZENROWS_API_KEY:              ${{ secrets.ZENROWS_API_KEY }}
+          SCRAPERAPI_KEY:               ${{ secrets.SCRAPERAPI_KEY }}
+          ANTHROPIC_API_KEY:            ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_CLOUD_VISION_API_KEY:  ${{ secrets.GOOGLE_CLOUD_VISION_API_KEY }}
+        run: |
+          {
+            echo "FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY}"
+            echo "ZENROWS_API_KEY=${ZENROWS_API_KEY}"
+            echo "SCRAPERAPI_KEY=${SCRAPERAPI_KEY}"
+            echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
+            echo "GOOGLE_CLOUD_VISION_API_KEY=${GOOGLE_CLOUD_VISION_API_KEY}"
+            echo "ANTHROPIC_MODEL=claude-haiku-4-5"
+          } > .env
+
+      - name: Write service account
+        env:
+          SA_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: echo "${SA_JSON}" > service_account.json
+
+      - name: Date metadata
+        id: meta
+        run: echo "date=$(date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      # ── Scrapers (each runs independently — one failure won't stop the rest) ──
+      - name: Scrape Midas
+        run: python run_midas_v2.py || echo "::warning::Midas scraper failed"
+
+      - name: Scrape Lube Town
+        run: python run_lubetown_v2.py || echo "::warning::Lube Town scraper failed"
+
+      - name: Scrape Econo Lube
+        run: python run_econolube_v2.py || echo "::warning::Econo Lube scraper failed"
+
+      - name: Scrape GCOC
+        run: python run_gcoc_v2.py || echo "::warning::GCOC scraper failed"
+
+      - name: Scrape Jiffy Lube
+        run: python run_jiffy_v2.py || echo "::warning::Jiffy Lube scraper failed"
+
+      - name: Scrape LubeFx Plus
+        run: python run_lubefx_v2.py || echo "::warning::LubeFx scraper failed"
+
+      - name: Scrape Mobil 1
+        run: python run_mobil1_lube_express_v2.py || echo "::warning::Mobil 1 scraper failed"
+
+      - name: Scrape Mr. Lube
+        run: python run_mrlube_v2.py || echo "::warning::Mr. Lube scraper failed"
+
+      - name: Scrape Quick Lane
+        run: python run_quicklane_v2.py || echo "::warning::Quick Lane scraper failed"
+
+      - name: Scrape Valvoline
+        run: python run_valvoline.py || echo "::warning::Valvoline scraper failed"
+
+      # ── Merge + push to Google Sheets ─────────────────────────────────────
+      - name: Merge and push to Sheets
+        run: python run_merger_v2.py
+
+      # ── Generate dashboard ────────────────────────────────────────────────
+      - name: Generate dashboard
+        run: python run_dashboard.py
+
+      # ── Commit updated data + dashboard back to repo ──────────────────────
+      - name: Commit data snapshot
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/index.html dashboard.html data/promotions/ data/ads/ data/sheets_ready/
+          git diff --staged --quiet || git commit -m "data: weekly update ${{ steps.meta.outputs.date }} [skip ci]"
+          git push
+
+      # ── Upload public/ as Pages artifact ─────────────────────────────────
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./public
+
+  # ── Job 2: Deploy to GitHub Pages ──────────────────────────────────────────
+  deploy:
+    needs: scrape-and-build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
