@@ -36,15 +36,17 @@ MAX_PER_COMPETITOR = 3
 # ---------------------------------------------------------------------------
 
 COMPETITORS: List[Dict] = [
-    {"name": "Midas",                     "advertiser_id": "AR11515155316006191105"},
-    {"name": "Lube Town",                 "advertiser_id": "AR07923297702782173185"},
-    {"name": "Jiffy Lube",                "advertiser_id": "AR10265048674404925441"},
-    {"name": "Great Canadian Oil Change", "advertiser_id": "AR06652422686691557377"},
-    {"name": "Quick Lane",                "advertiser_id": "AR01146826087020363777"},
-    {"name": "Valvoline",                 "advertiser_id": "AR06652422686691557377"},
-    {"name": "Econo Lube",               "advertiser_id": "AR03728714169130680321"},
-    {"name": "Lube FX Plus",             "advertiser_id": "AR07682908778362044417"},
-    {"name": "Mr. Lube + Tires",         "advertiser_id": "AR00685141515294474241"},
+    # advertiser_ids accepts a list so multiple national/agency AR IDs can be combined.
+    # Ads are collected across all IDs then capped at MAX_PER_COMPETITOR total.
+    {"name": "Midas",                     "advertiser_ids": ["AR04579314025283715073"]},
+    {"name": "Lube Town",                 "advertiser_ids": ["AR07923297702782173185"]},
+    {"name": "Jiffy Lube",                "advertiser_ids": ["AR18032045877266219009"]},
+    {"name": "Great Canadian Oil Change", "advertiser_ids": ["AR06652422686691557377"]},
+    {"name": "Quick Lane",                "advertiser_ids": ["AR01146826087020363777"]},
+    {"name": "Valvoline",                 "advertiser_ids": ["AR06652422686691557377"]},
+    {"name": "Econo Lube",               "advertiser_ids": ["AR03728714169130680321"]},
+    {"name": "Lube FX Plus",             "advertiser_ids": ["AR07682908778362044417"]},
+    {"name": "Mr. Lube + Tires",         "advertiser_ids": ["AR00685141515294474241"]},
 ]
 
 
@@ -140,59 +142,64 @@ def _discount(title: str, desc: str) -> str:
 
 def _scrape_one_competitor(competitor: Dict) -> Dict:
     name = competitor["name"]
-    advertiser_id = competitor["advertiser_id"]
+    # Support both legacy single "advertiser_id" and new list "advertiser_ids"
+    ar_ids: List[str] = competitor.get("advertiser_ids") or [competitor.get("advertiser_id", "")]
+    ar_ids = [a for a in ar_ids if a]
     today = datetime.now().strftime("%Y-%m-%d")
-    atc_url = f"https://adstransparency.google.com/advertiser/{advertiser_id}"
-
-    logger.info(f"[ads] {name}: fetching text creatives")
-    text_creatives = _get_text_creatives(advertiser_id)
-
-    if not text_creatives:
-        return {"competitor": name, "url": atc_url, "status": "no_creatives", "ads": []}
+    primary_url = f"https://adstransparency.google.com/advertiser/{ar_ids[0]}" if ar_ids else ""
 
     enriched: List[Dict] = []
     seen_titles: set = set()
-    fetched = 0
+    total_creatives = 0
 
-    for creative in text_creatives:
-        if fetched >= MAX_PER_COMPETITOR:
+    for advertiser_id in ar_ids:
+        if len(enriched) >= MAX_PER_COMPETITOR:
             break
 
-        creative_id = creative.get("ad_creative_id", "")
-        if not creative_id:
-            continue
+        logger.info(f"[ads] {name} ({advertiser_id}): fetching text creatives")
+        text_creatives = _get_text_creatives(advertiser_id)
+        total_creatives += len(text_creatives)
 
-        ad = _get_ad_details(advertiser_id, creative_id)
-        fetched += 1
-        time.sleep(0.5)
+        fetched = 0
+        for creative in text_creatives:
+            if len(enriched) >= MAX_PER_COMPETITOR or fetched >= MAX_PER_COMPETITOR:
+                break
 
-        if not ad:
-            logger.debug(f"[ads] {name}: no content in {creative_id}")
-            continue
+            creative_id = creative.get("ad_creative_id", "")
+            if not creative_id:
+                continue
 
-        title = ad["ad_title"]
-        key = title.lower()[:80]
-        if key in seen_titles:
-            continue
-        seen_titles.add(key)
+            ad = _get_ad_details(advertiser_id, creative_id)
+            fetched += 1
+            time.sleep(0.5)
 
-        enriched.append({
-            "business_name":  name,
-            "ad_title":       title,
-            "ad_description": ad["ad_description"],
-            "discount_value": _discount(title, ad["ad_description"]),
-            "ad_link":        creative.get("details_link", atc_url),
-            "displayed_link": ad["displayed_link"],
-            "date_scraped":   today,
-        })
+            if not ad:
+                logger.debug(f"[ads] {name}: no content in {creative_id}")
+                continue
+
+            title = ad["ad_title"]
+            key = title.lower()[:80]
+            if key in seen_titles:
+                continue
+            seen_titles.add(key)
+
+            enriched.append({
+                "business_name":  name,
+                "ad_title":       title,
+                "ad_description": ad["ad_description"],
+                "discount_value": _discount(title, ad["ad_description"]),
+                "ad_link":        creative.get("details_link", primary_url),
+                "displayed_link": ad["displayed_link"],
+                "date_scraped":   today,
+            })
 
     logger.info(f"[ads] {name}: {len(enriched)} unique ads extracted")
     return {
-        "competitor": name,
-        "url":        atc_url,
-        "status":     "ok" if enriched else "no_ads",
-        "ads":        enriched,
-        "creatives_found": len(text_creatives),
+        "competitor":      name,
+        "url":             primary_url,
+        "status":          "ok" if enriched else "no_ads",
+        "ads":             enriched,
+        "creatives_found": total_creatives,
     }
 
 
