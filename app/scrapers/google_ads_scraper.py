@@ -29,7 +29,8 @@ ADS_DIR = DATA_DIR / "ads"
 ADS_DIR.mkdir(parents=True, exist_ok=True)
 
 _SERPAPI_BASE = "https://serpapi.com/search"
-MAX_PER_COMPETITOR = 3
+MAX_PER_COMPETITOR = 3   # ads to keep per competitor
+MAX_FETCH_ATTEMPTS = 10  # max detail API calls per AR ID before giving up
 
 # ---------------------------------------------------------------------------
 # Competitor registry
@@ -182,7 +183,7 @@ def _scrape_one_competitor(competitor: Dict) -> Dict:
 
         fetched = 0
         for creative in text_creatives:
-            if len(enriched) >= MAX_PER_COMPETITOR or fetched >= MAX_PER_COMPETITOR:
+            if len(enriched) >= MAX_PER_COMPETITOR or fetched >= MAX_FETCH_ATTEMPTS:
                 break
 
             creative_id = creative.get("ad_creative_id", "")
@@ -203,7 +204,7 @@ def _scrape_one_competitor(competitor: Dict) -> Dict:
                 continue
 
             title = ad["ad_title"]
-            key = title.lower()[:80]
+            key = (title.lower()[:80], ad["ad_description"].lower()[:80])
             if key in seen_titles:
                 continue
             seen_titles.add(key)
