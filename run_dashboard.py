@@ -915,9 +915,7 @@ def main():
     html = build_html(ads, promos)
     OUT_FILE.write_text(html, encoding="utf-8")
     print(f"Dashboard → {OUT_FILE}")
-    PUBLIC_FILE.parent.mkdir(parents=True, exist_ok=True)
-    PUBLIC_FILE.write_text(html, encoding="utf-8")
-    print(f"Pages     → {PUBLIC_FILE}")
+    # public/index.html is the live GitHub Pages dashboard — do not overwrite it here.
     if args.open:
         webbrowser.open(OUT_FILE.as_uri())
 
