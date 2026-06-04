@@ -34,7 +34,6 @@ SHEET_ID = "11e3ErdYFIQ3MIOEpnLEGS4MH0s2AbSIhiQsgzQG_m88"
 # Tab name → city filter (None = write all rows).
 # Tab names are exactly as they appear in the spreadsheet (note leading space on Grande Prairie).
 CITY_TABS: List[Tuple[str, Optional[str]]] = [
-    ("Promotions & Offers",    None),           # master tab — all cities
     ("Edmonton Promos",        "Edmonton"),
     ("Calgary Promos",         "Calgary"),
     (" Grande Prairie Promos", "Grande Prairie"),  # leading space is intentional
