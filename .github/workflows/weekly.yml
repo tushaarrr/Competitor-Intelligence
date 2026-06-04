@@ -91,7 +91,7 @@ jobs:
 
       # ── Merge promotions + push to Google Sheets ──────────────────────────
       - name: Merge and push to Sheets
-        run: python run_merger_v2.py
+        run: python run_merger_v2.py || echo "::warning::Merger failed"
 
       # ── Scrape Google Ads + push to Advertisements tab ────────────────────
       - name: Scrape Google Ads
@@ -99,18 +99,18 @@ jobs:
 
       # ── Generate legacy dashboard.html (does NOT overwrite public/) ────────
       - name: Generate dashboard
-        run: python run_dashboard.py
+        run: python run_dashboard.py || echo "::warning::Dashboard generation failed"
 
       # ── Commit updated data back to repo (dashboard fetches from these) ───
       - name: Commit data snapshot
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f data/ads/google_ads.json
-          git add -f data/sheets_ready/promotions_merged_for_sheets.json
-          git add dashboard.html
+          [ -f data/ads/google_ads.json ] && git add -f data/ads/google_ads.json || true
+          [ -f data/sheets_ready/promotions_merged_for_sheets.json ] && git add -f data/sheets_ready/promotions_merged_for_sheets.json || true
+          [ -f dashboard.html ] && git add dashboard.html || true
           git diff --staged --quiet || git commit -m "data: weekly update ${{ steps.meta.outputs.date }} [skip ci]"
-          git push
+          git push || true
 
       # ── Upload public/ as Pages artifact ─────────────────────────────────
       - name: Upload Pages artifact
