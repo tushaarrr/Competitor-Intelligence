@@ -99,10 +99,11 @@ def push_ads_to_sheets(ads: list) -> bool:
 
     last_col = chr(ord("A") + len(ADS_COLUMNS) - 1)  # "G" for 7 columns
 
-    # Clear existing data rows (keep header row 1)
+    # Clear the FULL width (A:Z) so leftover columns from any previous
+    # merger run (which writes 15 cols) are wiped before writing 7 cols.
     sheets.values().clear(
         spreadsheetId=SHEET_ID,
-        range=f"'{ADS_TAB}'!A2:{last_col}10000",
+        range=f"'{ADS_TAB}'!A2:Z10000",
     ).execute()
 
     if not ads:
